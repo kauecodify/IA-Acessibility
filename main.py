@@ -1,14 +1,17 @@
+from flask import Flask, request, render_template
 import tensorflow as tf
 from tensorflow.keras.layers import Embedding, LSTM, Dense
 from tensorflow.keras.models import Sequential
+import pandas as pd
 
-training_data = ["frase1",
-                 "frase2",
-                 "frase3"]
+app = Flask(__name__)
 
+# Carregar modelo
+training_data = [ "prompt.txt"]
 tokenizer = tf.keras.preprocessing.text.Tokenizer()
 tokenizer.fit_on_texts(training_data)
 vocab_size = len(tokenizer.word_index) + 1
+#>
 
 sequences = tokenizer.texts_to_sequences(training_data)
 max_sequence_len = max([len(x) for x in sequences])
@@ -20,8 +23,20 @@ model = Sequential([
     Dense(vocab_size, activation='softmax')
 ])
 model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-
 model.fit(padded_sequences[:,:-1], tf.keras.utils.to_categorical(padded_sequences[:,-1], num_classes=vocab_size), epochs=50)
+
+requests_df = pd.DataFrame(columns=['User Request', 'Generated Text'])
+
+@app.route('/')
+def index():
+    return render_template('index.html', generated_text=None)
+
+@app.route('/submit_request', methods=['POST'])
+def submit_request():
+    user_request = request.form['user_request']
+    generated_text = generate_text(user_request, 5, model, max_sequence_len)
+    requests_df.loc[len(requests_df)] = [user_request, generated_text]
+    return render_template('index.html', generated_text=generated_text)
 
 def generate_text(seed_text, next_words, model, max_sequence_len):
     for _ in range(next_words):
@@ -36,6 +51,5 @@ def generate_text(seed_text, next_words, model, max_sequence_len):
         seed_text += " " + output_word
     return seed_text
 
-generated_text = generate_text("exemplo de", 5, model, max_sequence_len)
-
-print(generated_text)
+if __name__ == '__main__':
+    app.run(debug=True)
